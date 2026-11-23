@@ -89,9 +89,9 @@ namespace HeavenlyWarrior.Prototype
         {
             Instance = this;
             _noFriction = new PhysicsMaterial2D("NoFriction") { friction = 0f, bounciness = 0f };
-            _groundSprite = Resources.Load<Sprite>(LevelArt + "ground");
-            _ledgeSprite = Resources.Load<Sprite>(LevelArt + "ledge");
-            _backdropSprite = Resources.Load<Sprite>(LevelArt + "backdrop");
+            _groundSprite = SpriteLoader.LoadCentered(LevelArt + "ground");
+            _ledgeSprite = SpriteLoader.LoadCentered(LevelArt + "ledge");
+            _backdropSprite = SpriteLoader.LoadCentered(LevelArt + "backdrop");
             Build();
         }
 
@@ -197,6 +197,10 @@ namespace HeavenlyWarrior.Prototype
             CreateBackdrop(cam);
 
             if (GetComponent<PrototypeHUD>() == null) gameObject.AddComponent<PrototypeHUD>();
+
+            Debug.Log($"[Heavenly Warrior] Nível montado: jogador em {(Vector2)_player.transform.position}, " +
+                      $"câmara em {(Vector2)cam.transform.position} (tamanho {cam.orthographicSize}), " +
+                      $"{EnemiesTotal} inimigos, {_orbs.Count} orbes.");
         }
 
         // ---------------------------------------------------------------- desenho do nível
@@ -534,7 +538,7 @@ namespace HeavenlyWarrior.Prototype
         PlayerController SpawnPlayer(Vector2 position)
         {
             var go = CharacterBase("Jogador", position, PlayerSize, 6, Team.Player);
-            var visual = CreateVisual(go, "Blue", PlayerSize, PlayerColor, 10, out _, out var animator);
+            var visual = CreateVisual(go, "Blue", PlayerSize, PlayerColor, 50, out _, out var animator);
 
             var flash = go.AddComponent<HitFlash>();
             flash.visualRoot = visual;
@@ -552,7 +556,7 @@ namespace HeavenlyWarrior.Prototype
             {
                 // Sem sprites: mostra a hitbox do golpe como um retângulo semitransparente.
                 var slash = PrototypeSprites.CreateRect(go.transform, "Golpe", Vector2.zero, Vector2.one,
-                                                        new Color(0.7f, 0.95f, 1f, 0.55f), 15);
+                                                        new Color(0.7f, 0.95f, 1f, 0.55f), 55);
                 combat.slashVisual = slash;
             }
 
@@ -565,7 +569,7 @@ namespace HeavenlyWarrior.Prototype
         {
             var size = type.Size;
             var go = CharacterBase(type.Name, new Vector2(x, groundY + size.y * 0.5f), size, type.MaxHealth, Team.Enemy);
-            var visual = CreateVisual(go, type.SpriteSet, size, type.FallbackColor, 5, out var body, out var animator);
+            var visual = CreateVisual(go, type.SpriteSet, size, type.FallbackColor, 40, out var body, out var animator);
             if (animator != null && dummy) body.color = new Color(0.75f, 0.75f, 0.75f);
 
             var flash = go.AddComponent<HitFlash>();
@@ -605,9 +609,9 @@ namespace HeavenlyWarrior.Prototype
             bar.width = Mathf.Max(0.9f, size.x);
             bar.health = health;
             bar.background = PrototypeSprites.CreateRect(barRoot, "Fundo", Vector2.zero, new Vector2(bar.width + 0.06f, 0.14f),
-                                                         new Color(0f, 0f, 0f, 0.7f), 20);
+                                                         new Color(0f, 0f, 0f, 0.7f), 60);
             bar.fill = PrototypeSprites.CreateRect(barRoot, "Vida", Vector2.zero, new Vector2(bar.width, 0.08f),
-                                                   new Color(0.9f, 0.2f, 0.25f), 21);
+                                                   new Color(0.9f, 0.2f, 0.25f), 61);
 
             go.SetActive(true);
             _enemies.Add(ai);
