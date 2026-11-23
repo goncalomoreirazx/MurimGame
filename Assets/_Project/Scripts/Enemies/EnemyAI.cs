@@ -37,6 +37,12 @@ namespace HeavenlyWarrior
             lungeSpeed = 5f, lungeTime = 0.1f
         };
 
+        [Header("Resistência")]
+        [Tooltip("Se ativo, os golpes não interrompem o inimigo enquanto prepara ou dá um ataque.")]
+        public bool superArmor;
+        [Tooltip("Multiplica o empurrão recebido (0 = não se mexe, 1 = normal).")]
+        [Range(0f, 1f)] public float knockbackMultiplier = 1f;
+
         [Header("Outros")]
         public bool isTrainingDummy;
         public float dummyRespawnTime = 1.5f;
@@ -213,15 +219,21 @@ namespace HeavenlyWarrior
         void DoHits()
         {
             int hits = attack.ApplyHits(transform.position, _facing, _health.team, gameObject, _hitThisSwing, _buffer);
-            if (hits > 0) HitStop.Do(attack.hitstop);
+            if (hits > 0)
+            {
+                HitStop.Do(attack.hitstop);
+                CameraFollow.Shake(attack.shake, 0.12f);
+            }
         }
 
         void OnDamaged(DamageInfo info)
         {
             if (_health.IsDead) return;
+            bool armored = superArmor && (_state == State.Windup || _state == State.Attack);
+            if (armored) return; // aguenta o golpe e continua o ataque (só pisca)
             SetTint(_baseTint);
             SetState(State.Stunned, info.Stun);
-            _rb.SetVelocity(info.Knockback);
+            _rb.SetVelocity(info.Knockback * knockbackMultiplier);
             if (info.Source != null) SetFacing(info.Source.transform.position.x >= transform.position.x ? 1 : -1);
         }
 
