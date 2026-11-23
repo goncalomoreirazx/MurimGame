@@ -84,7 +84,7 @@ namespace HeavenlyWarrior
             if (_phase == Phase.None)
             {
                 if (Time.time - _lastAttackEnd > comboWindow) _nextComboIndex = 0;
-                if (_bufferTimer > 0f && _controller.CanAct) StartAttack(_nextComboIndex);
+                if (_bufferTimer > 0f && _controller.CanAct && _controller.ControlsEnabled) StartAttack(_nextComboIndex);
                 return;
             }
 

@@ -5,38 +5,76 @@ using UnityEngine;
 namespace HeavenlyWarrior.Prototype
 {
     /// <summary>
-    /// Monta por código o primeiro nível de teste (Floresta Mística ao Luar): fundo com parallax,
-    /// chão de pedra, plataformas, o jogador, um boneco de treino e as criaturas
-    /// (lobos, jiangshi e um golem). Assim o jogo é jogável numa cena vazia, sem configurar nada no Editor.
+    /// Monta por código o nível 1 (Floresta Mística ao Luar) como um nível de plataformas clássico:
+    /// portão de início à esquerda, portal da meta à direita, buracos, plataformas (algumas móveis),
+    /// orbes de Qi para apanhar, lanternas de checkpoint e inimigos espalhados, com o golem perto do fim.
     ///
     /// Arranca sozinho ao carregar Play em qualquer cena que ainda não tenha um PlayerController.
     /// Para desligar, mete AutoBuild = false (ou cria a tua própria cena com um jogador).
     /// Se a arte não existir em Resources, usa retângulos de cor no lugar dela.
+    ///
+    /// O desenho do nível está todo em BuildLayout(): é aí que se mudam buracos, plataformas e inimigos.
     /// </summary>
     public class PrototypeArena : MonoBehaviour
     {
         public static bool AutoBuild = true;
         public static PrototypeArena Instance { get; private set; }
 
-        const float GroundTop = 0f;
+        public enum Outcome { Playing, Won, GameOver }
+
         const string LevelArt = "Levels/Forest/";
+        const float GroundBottom = -8f;   // fundo dos blocos de chão (bem abaixo do ecrã)
+        const float KillY = -7f;          // abaixo disto, caiu num buraco
+        const int FallDamage = 2;
+
         static readonly Vector2 PlayerSize = new Vector2(0.6f, 1.5f);
-        static readonly Vector2 CameraLimits = new Vector2(-12f, 32f);
 
         static readonly Color GroundColor = new Color(0.23f, 0.2f, 0.22f);
+        static readonly Color GroundDeepColor = new Color(0.06f, 0.07f, 0.11f);
         static readonly Color PlatformColor = new Color(0.36f, 0.27f, 0.22f);
         static readonly Color PlayerColor = new Color(0.35f, 0.65f, 1f);
-        static readonly Color SkyColor = new Color(0.09f, 0.1f, 0.16f);
+        static readonly Color SkyColor = new Color(0.05f, 0.06f, 0.11f);
         /// <summary>Escurece um pouco o fundo para os personagens se destacarem.</summary>
         static readonly Color BackdropTint = new Color(0.78f, 0.8f, 0.88f);
+        static readonly Color ToriiRed = new Color(0.62f, 0.12f, 0.1f);
+        static readonly Color ToriiDark = new Color(0.18f, 0.08f, 0.08f);
 
         enum BlockKind { Ground, Platform, Invisible }
 
+        // ---------------------------------------------------------------- estado do nível
+
         readonly List<EnemyAI> _enemies = new List<EnemyAI>();
+        readonly List<QiOrb> _orbs = new List<QiOrb>();
+        readonly List<Checkpoint> _checkpoints = new List<Checkpoint>();
+        readonly List<Vector2> _checkpointSpawns = new List<Vector2>();
+
         Transform _level;
         PlayerController _player;
         PhysicsMaterial2D _noFriction;
         Sprite _groundSprite, _ledgeSprite, _backdropSprite;
+
+        Vector2 _startSpawn;
+        float _goalX;
+        float _goalGroundY;
+        Vector2 _cameraLimits;
+
+        /// <summary>Checkpoint ativo (-1 = início). Mantém-se ao recomeçar depois de morrer.</summary>
+        int _checkpointIndex = -1;
+        float _startTime;
+        float _endTime;
+
+        public Outcome State { get; private set; }
+        public PlayerController Player => _player;
+        public int OrbsCollected { get; private set; }
+        public int OrbsTotal => _orbs.Count;
+        public int EnemiesDefeated { get; private set; }
+        public int EnemiesTotal { get; private set; }
+        public int Falls { get; private set; }
+        public float ElapsedTime => (State == Outcome.Playing ? Time.time : _endTime) - _startTime;
+        public float LevelStartX => _startSpawn.x;
+        public float LevelGoalX => _goalX;
+        public IReadOnlyList<Checkpoint> Checkpoints => _checkpoints;
+        public string LevelName => "Floresta Mística ao Luar";
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         static void AutoStart()
@@ -62,58 +100,98 @@ namespace HeavenlyWarrior.Prototype
             if (Instance == this) Instance = null;
         }
 
+        // ---------------------------------------------------------------- regras do jogo
+
         void Update()
         {
             if (_player == null) return;
-            if (GameInput.RestartPressed && (_player.Health.IsDead || EnemiesLeft == 0))
-                Build();
-        }
 
-        public int EnemiesLeft
-        {
-            get
+            if (GameInput.RestartPressed && State != Outcome.Playing)
             {
-                int n = 0;
-                foreach (var e in _enemies)
-                    if (e != null && !e.isTrainingDummy && e.CurrentState != EnemyAI.State.Dead) n++;
-                return n;
+                if (State == Outcome.Won) _checkpointIndex = -1; // ganhou: recomeça do início
+                Build();
+                return;
+            }
+
+            if (State != Outcome.Playing) return;
+
+            Vector2 p = _player.transform.position;
+
+            // Orbes de Qi
+            foreach (var orb in _orbs)
+                if (orb != null && orb.TryCollect(p)) OrbsCollected++;
+
+            // Checkpoints (acendem ao passar por eles)
+            for (int i = 0; i < _checkpoints.Count; i++)
+            {
+                if (i <= _checkpointIndex || p.x < _checkpoints[i].transform.position.x) continue;
+                _checkpoints[i].Activate();
+                _checkpointIndex = i;
+            }
+
+            // Inimigos que caem nos buracos desaparecem
+            foreach (var e in _enemies)
+                if (e != null && e.transform.position.y < KillY) Destroy(e.gameObject);
+
+            // Caiu num buraco
+            if (p.y < KillY && !_player.Health.IsDead)
+            {
+                Falls++;
+                _player.Health.LoseHealth(FallDamage);
+                if (!_player.Health.IsDead)
+                {
+                    _player.Teleport(CurrentSpawn());
+                    _player.Health.GrantInvulnerability(1.5f);
+                    var follow = Camera.main != null ? Camera.main.GetComponent<CameraFollow>() : null;
+                    if (follow != null) follow.SnapToTarget();
+                }
+            }
+
+            if (_player.Health.IsDead)
+            {
+                State = Outcome.GameOver;
+                _endTime = Time.time;
+                return;
+            }
+
+            // Chegou ao portal
+            if (p.x >= _goalX - 0.3f && Mathf.Abs(p.y - (_goalGroundY + PlayerSize.y * 0.5f)) < 3f)
+            {
+                State = Outcome.Won;
+                _endTime = Time.time;
+                _player.ControlsEnabled = false;
+                CameraFollow.Shake(0.08f, 0.25f);
             }
         }
 
-        public PlayerController Player => _player;
+        Vector2 CurrentSpawn() =>
+            _checkpointIndex >= 0 && _checkpointIndex < _checkpointSpawns.Count ? _checkpointSpawns[_checkpointIndex] : _startSpawn;
 
         /// <summary>Apaga e volta a montar o nível (usado também para recomeçar).</summary>
         public void Build()
         {
             if (_level != null) Destroy(_level.gameObject);
             _enemies.Clear();
+            _orbs.Clear();
+            _checkpoints.Clear();
+            _checkpointSpawns.Clear();
             Time.timeScale = 1f;
+            State = Outcome.Playing;
+            OrbsCollected = 0;
+            EnemiesDefeated = 0;
+            EnemiesTotal = 0;
+            Falls = 0;
+            _startTime = Time.time;
 
             _level = new GameObject("Level").transform;
             _level.SetParent(transform, false);
 
             EnsureLight();
+            BuildLayout();
 
-            // Chão e paredes (as paredes ficam fora do ecrã, só impedem de sair do nível)
-            Block("Chão", new Vector2(10f, GroundTop - 2f), new Vector2(64f, 4f), BlockKind.Ground);
-            Block("Parede esquerda", new Vector2(-22.5f, 6f), new Vector2(1f, 16f), BlockKind.Invisible);
-            Block("Parede direita", new Vector2(42.5f, 6f), new Vector2(1f, 16f), BlockKind.Invisible);
-
-            // Plataformas
-            Block("Plataforma 1", new Vector2(6f, 2.0f), new Vector2(4f, 0.5f), BlockKind.Platform);
-            Block("Plataforma 2", new Vector2(11.5f, 3.8f), new Vector2(3f, 0.5f), BlockKind.Platform);
-            Block("Plataforma 3", new Vector2(20f, 2.5f), new Vector2(6f, 0.5f), BlockKind.Platform);
-            Block("Plataforma 4", new Vector2(28f, 4.2f), new Vector2(4f, 0.5f), BlockKind.Platform);
-            Block("Degrau", new Vector2(34f, 0.5f), new Vector2(3f, 1f), BlockKind.Platform);
-
-            _player = SpawnPlayer(new Vector2(-4f, GroundTop + PlayerSize.y * 0.5f));
-
-            SpawnEnemy(EnemyType.Dummy, 2f, GroundTop, dummy: true);
-            SpawnEnemy(EnemyType.Wolf, 12f, GroundTop);
-            SpawnEnemy(EnemyType.Jiangshi, 20f, 2.75f, patrol: 2f);       // em cima da plataforma 3
-            SpawnEnemy(EnemyType.Jiangshi, 25f, GroundTop, patrol: 2f);
-            SpawnEnemy(EnemyType.Wolf, 29f, GroundTop);
-            SpawnEnemy(EnemyType.Golem, 39f, GroundTop, patrol: 1.5f);
+            // Recomeçar depois de morrer: volta ao último checkpoint, que já fica aceso.
+            for (int i = 0; i <= _checkpointIndex && i < _checkpoints.Count; i++) _checkpoints[i].Activate();
+            if (_checkpointIndex >= 0) _player.Teleport(CurrentSpawn());
 
             var cam = SetupCamera();
             CreateBackdrop(cam);
@@ -121,9 +199,108 @@ namespace HeavenlyWarrior.Prototype
             if (GetComponent<PrototypeHUD>() == null) gameObject.AddComponent<PrototypeHUD>();
         }
 
-        // ---------------------------------------------------------------- cenário
+        // ---------------------------------------------------------------- desenho do nível
 
-        void Block(string name, Vector2 center, Vector2 size, BlockKind kind)
+        /// <summary>
+        /// O nível, da esquerda para a direita. Unidades: 1 = 100 px dos sprites; o jogador tem 1,5 de altura,
+        /// salta cerca de 3,3 (5,8 com o salto duplo) e atravessa buracos de ~7 com um salto em corrida.
+        /// </summary>
+        void BuildLayout()
+        {
+            const float left = -10f, right = 201f;
+            _cameraLimits = new Vector2(0f, 191f);
+
+            // Limites do nível (invisíveis)
+            Block("Parede esquerda", new Vector2(left - 0.5f, 10f), new Vector2(1f, 40f), BlockKind.Invisible);
+            Block("Parede direita", new Vector2(right + 0.5f, 10f), new Vector2(1f, 40f), BlockKind.Invisible);
+
+            // 1. Início: portão, boneco de treino para aquecer
+            Ground(left, 22f, 0f);
+            Torii(-3f, 0f, portal: false);
+            _startSpawn = new Vector2(0f, PlayerSize.y * 0.5f);
+            Enemy(EnemyType.Dummy, 10f, 0f, dummy: true);
+            OrbLine(4f, 1.2f, 8f, 1.2f, 4);
+
+            // 2. Primeiro buraco (4 de largura) e o primeiro lobo
+            OrbArc(22f, 26f, 1.5f, 2f, 5);
+            Ground(26f, 44f, 0f);
+            Enemy(EnemyType.Wolf, 36f, 0f);
+
+            // 3. Degrau para cima, com uma plataforma por cima e um jiangshi
+            Ground(44f, 60f, 1.5f);
+            Platform(52f, 4.5f, 3f);
+            OrbLine(51f, 5.4f, 53f, 5.4f, 3);
+            Enemy(EnemyType.Jiangshi, 55f, 1.5f, patrol: 2.5f);
+
+            // 4. Buraco grande com duas plataformas pelo meio
+            Platform(64f, 2.5f, 3f);
+            Platform(69.5f, 3.5f, 3f);
+            OrbArc(62.5f, 65.5f, 3.3f, 1f, 3);
+            OrbArc(68f, 71f, 4.3f, 1f, 3);
+            Ground(74f, 96f, 0f);
+            Checkpoint(78f, 0f);
+            Enemy(EnemyType.Wolf, 84f, 0f);
+            Enemy(EnemyType.Jiangshi, 91f, 0f, patrol: 2f);
+
+            // 5. Buraco com plataforma móvel
+            MovingPlatformAt(99f, 109f, 1.5f, 3f, 2.8f);
+            OrbLine(100f, 2.6f, 108f, 2.6f, 5);
+            Ground(112f, 132f, 0.5f);
+            Enemy(EnemyType.Wolf, 118f, 0.5f);
+            Platform(126f, 3.75f, 5f);
+            Enemy(EnemyType.Jiangshi, 126f, 3.75f, patrol: 1.5f);
+
+            // 6. Pilares com buracos entre eles
+            Ground(135f, 139f, 1.5f);
+            Ground(142f, 146f, 3f);
+            Ground(149f, 153f, 1.5f);
+            OrbArc(132f, 135f, 2.2f, 1.2f, 3);
+            OrbArc(139f, 142f, 3.8f, 1.2f, 3);
+            OrbArc(146f, 149f, 3.8f, 1.2f, 3);
+
+            // 7. Reta final: checkpoint, um lobo, o golem como guarda e o portal da meta
+            Ground(153f, right, 0f);
+            Checkpoint(156f, 0f);
+            Platform(166f, 3f, 4f);
+            OrbLine(165f, 3.9f, 167f, 3.9f, 3);
+            Enemy(EnemyType.Wolf, 168f, 0f);
+            Enemy(EnemyType.Golem, 181f, 0f, patrol: 2f);
+            Torii(193f, 0f, portal: true);
+            _goalX = 193f;
+            _goalGroundY = 0f;
+
+            _player = SpawnPlayer(_startSpawn);
+        }
+
+        // ---------------------------------------------------------------- peças do nível
+
+        /// <summary>Bloco de chão de x0 a x1 com o topo à altura "top" (vai até lá abaixo).</summary>
+        void Ground(float x0, float x1, float top)
+        {
+            var size = new Vector2(x1 - x0, top - GroundBottom);
+            Block("Chão", new Vector2((x0 + x1) * 0.5f, (top + GroundBottom) * 0.5f), size, BlockKind.Ground);
+        }
+
+        void Platform(float centerX, float top, float width)
+        {
+            const float thickness = 0.5f;
+            Block("Plataforma", new Vector2(centerX, top - thickness * 0.5f), new Vector2(width, thickness), BlockKind.Platform);
+        }
+
+        void MovingPlatformAt(float fromX, float toX, float top, float width, float speed)
+        {
+            const float thickness = 0.5f;
+            var go = Block("Plataforma móvel", new Vector2(fromX, top - thickness * 0.5f), new Vector2(width, thickness), BlockKind.Platform);
+            go.SetActive(false);
+            go.AddComponent<Rigidbody2D>();
+            var mp = go.AddComponent<MovingPlatform>();
+            mp.pointA = go.transform.position;
+            mp.pointB = new Vector2(toX, go.transform.position.y);
+            mp.speed = speed;
+            go.SetActive(true);
+        }
+
+        GameObject Block(string name, Vector2 center, Vector2 size, BlockKind kind)
         {
             var go = new GameObject(name);
             go.transform.SetParent(_level, false);
@@ -135,16 +312,23 @@ namespace HeavenlyWarrior.Prototype
             switch (kind)
             {
                 case BlockKind.Ground:
-                    // Faixa de caminho + muro de pedra; o caminho fica um pouco acima do topo do collider,
-                    // para os pés assentarem no meio do caminho.
-                    if (!TiledVisual(go.transform, _groundSprite, size, size.y + 0.26f, 0.26f, 0))
-                        ColorVisual(go.transform, size, GroundColor);
+                    // Faixa de caminho + muro de pedra no topo; por baixo, escuro até ao fundo.
+                    const float stripHeight = 4.26f, overhang = 0.26f;
+                    if (TiledVisual(go.transform, _groundSprite, size, stripHeight, overhang, 0))
+                    {
+                        float fill = size.y + overhang - stripHeight;
+                        if (fill > 0f)
+                            PrototypeSprites.CreateRect(go.transform, "Fundo", new Vector2(0f, -size.y * 0.5f + fill * 0.5f + 0.02f),
+                                                        new Vector2(size.x, fill + 0.05f), GroundDeepColor, -1);
+                    }
+                    else ColorVisual(go.transform, size, GroundColor);
                     break;
                 case BlockKind.Platform:
                     if (!TiledVisual(go.transform, _ledgeSprite, size, size.y + 0.25f, 0.1f, 1))
                         ColorVisual(go.transform, size, PlatformColor);
                     break;
             }
+            return go;
         }
 
         void ColorVisual(Transform parent, Vector2 size, Color color)
@@ -156,8 +340,8 @@ namespace HeavenlyWarrior.Prototype
         }
 
         /// <summary>
-        /// Repete um sprite na horizontal para cobrir um bloco. A altura visual pode ser maior que o collider
-        /// (topOverhang = quanto o desenho sobe acima do topo do collider).
+        /// Repete um sprite na horizontal para cobrir um bloco. visualHeight é a altura do desenho
+        /// e topOverhang quanto ele sobe acima do topo do collider.
         /// </summary>
         bool TiledVisual(Transform parent, Sprite sprite, Vector2 size, float visualHeight, float topOverhang, int order)
         {
@@ -179,34 +363,117 @@ namespace HeavenlyWarrior.Prototype
             return true;
         }
 
+        /// <summary>Portão torii: no início (sem portal) e na meta (com portal a brilhar).</summary>
+        void Torii(float x, float groundY, bool portal)
+        {
+            var root = new GameObject(portal ? "Meta - Portal" : "Início - Portão").transform;
+            root.SetParent(_level, false);
+            root.position = new Vector3(x, groundY, 0f);
+
+            const float halfSpan = 1.6f, height = 4.2f;
+            PrototypeSprites.CreateRect(root, "Pilar esq", new Vector2(-halfSpan, height * 0.5f), new Vector2(0.35f, height), ToriiRed, 2);
+            PrototypeSprites.CreateRect(root, "Pilar dir", new Vector2(halfSpan, height * 0.5f), new Vector2(0.35f, height), ToriiRed, 2);
+            PrototypeSprites.CreateRect(root, "Nuki", new Vector2(0f, height - 0.7f), new Vector2(halfSpan * 2f + 0.6f, 0.22f), ToriiRed, 3);
+            PrototypeSprites.CreateRect(root, "Kasagi", new Vector2(0f, height + 0.1f), new Vector2(halfSpan * 2f + 1.4f, 0.35f), ToriiDark, 3);
+            PrototypeSprites.CreateRect(root, "Placa", new Vector2(0f, height - 0.3f), new Vector2(0.5f, 0.6f), ToriiDark, 4);
+
+            if (portal)
+            {
+                var glow = PrototypeSprites.CreateRect(root, "Portal", new Vector2(0f, (height - 0.8f) * 0.5f),
+                                                       new Vector2(halfSpan * 2f - 0.35f, height - 0.8f),
+                                                       new Color(0.55f, 0.9f, 1f, 0.55f), 1);
+                PrototypeSprites.CreateRect(root, "Núcleo", new Vector2(0f, (height - 0.8f) * 0.5f),
+                                            new Vector2(1.2f, height - 1.4f), new Color(0.9f, 1f, 1f, 0.35f), 1);
+                var gp = root.gameObject.AddComponent<GoalPortal>();
+                gp.glow = glow;
+            }
+        }
+
+        /// <summary>Lanterna de pedra que acende ao passar (checkpoint).</summary>
+        void Checkpoint(float x, float groundY)
+        {
+            var root = new GameObject("Checkpoint").transform;
+            root.SetParent(_level, false);
+            root.position = new Vector3(x, groundY, 0f);
+
+            var stone = new Color(0.42f, 0.42f, 0.48f);
+            PrototypeSprites.CreateRect(root, "Base", new Vector2(0f, 0.12f), new Vector2(0.6f, 0.25f), stone * 0.8f, 2);
+            PrototypeSprites.CreateRect(root, "Pilar", new Vector2(0f, 0.7f), new Vector2(0.22f, 0.95f), stone, 2);
+            PrototypeSprites.CreateRect(root, "Caixa", new Vector2(0f, 1.4f), new Vector2(0.6f, 0.5f), stone, 2);
+            var flame = PrototypeSprites.CreateRect(root, "Chama", new Vector2(0f, 1.4f), new Vector2(0.3f, 0.3f), Color.gray, 3);
+            PrototypeSprites.CreateRect(root, "Telhado", new Vector2(0f, 1.72f), new Vector2(0.85f, 0.16f), stone * 0.7f, 3);
+
+            var cp = root.gameObject.AddComponent<Checkpoint>();
+            cp.flame = flame;
+            _checkpoints.Add(cp);
+            _checkpointSpawns.Add(new Vector2(x + 1f, groundY + PlayerSize.y * 0.5f));
+        }
+
+        void Orb(Vector2 position)
+        {
+            var go = new GameObject("Orbe de Qi");
+            go.transform.SetParent(_level, false);
+            go.transform.position = position;
+            PrototypeSprites.CreateRect(go.transform, "Brilho", Vector2.zero, new Vector2(0.34f, 0.34f), new Color(0.45f, 0.8f, 1f, 0.9f), 8);
+            PrototypeSprites.CreateRect(go.transform, "Centro", Vector2.zero, new Vector2(0.14f, 0.14f), new Color(0.95f, 1f, 1f), 9);
+            _orbs.Add(go.AddComponent<QiOrb>());
+        }
+
+        void OrbLine(float x0, float y0, float x1, float y1, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                float t = count == 1 ? 0.5f : i / (float)(count - 1);
+                Orb(new Vector2(Mathf.Lerp(x0, x1, t), Mathf.Lerp(y0, y1, t)));
+            }
+        }
+
+        /// <summary>Arco de orbes por cima de um buraco (mostra o caminho do salto).</summary>
+        void OrbArc(float x0, float x1, float baseY, float height, int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                float t = count == 1 ? 0.5f : i / (float)(count - 1);
+                Orb(new Vector2(Mathf.Lerp(x0, x1, t), baseY + Mathf.Sin(t * Mathf.PI) * height));
+            }
+        }
+
         void CreateBackdrop(Camera cam)
         {
             cam.backgroundColor = SkyColor;
             if (_backdropSprite == null) return;
 
-            var go = new GameObject("Fundo - Floresta Mística");
-            go.transform.SetParent(_level, false);
+            var root = new GameObject("Fundo - Floresta Mística");
+            root.transform.SetParent(_level, false);
 
-            // Alto o suficiente para cobrir o ecrã mesmo com o jogador em cima das plataformas.
-            const float height = 15f;
-            const float bottom = GroundTop - 0.4f; // escondido atrás do chão
+            // Alto o suficiente para cobrir o ecrã em cima dos pilares e mostrar a floresta nos buracos.
+            const float height = 18f;
+            const float bottom = -3.4f;
             float scale = height / _backdropSprite.bounds.size.y;
-            go.transform.localScale = new Vector3(scale, scale, 1f);
+            float width = _backdropSprite.bounds.size.x * scale;
 
-            var parallax = go.AddComponent<ParallaxLayer>();
-            parallax.factor = new Vector2(0.85f, 0f);
+            var parallax = root.AddComponent<ParallaxLayer>();
+            parallax.factor = new Vector2(0.9f, 0f);
+
+            // Três cópias lado a lado; as das pontas espelhadas, para as junções coincidirem.
+            for (int i = -1; i <= 1; i++)
+            {
+                var go = new GameObject("Fundo " + (i + 2));
+                go.transform.SetParent(root.transform, false);
+                go.transform.localPosition = new Vector3(i * width, 0f, 0f);
+                go.transform.localScale = new Vector3(i == 0 ? scale : -scale, scale, 1f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = _backdropSprite;
+                sr.color = BackdropTint;
+                sr.sortingOrder = -100;
+            }
 
             // Posição inicial escolhida para o fundo ficar centrado quando a câmara está a meio do nível.
-            float middle = (CameraLimits.x + CameraLimits.y) * 0.5f;
+            float middle = (_cameraLimits.x + _cameraLimits.y) * 0.5f;
             float camX = cam.transform.position.x;
             float startX = middle - parallax.factor.x * (middle - camX);
-            go.transform.position = new Vector3(startX, bottom + height * 0.5f, 0f);
+            root.transform.position = new Vector3(startX, bottom + height * 0.5f, 0f);
             parallax.Init(cam.transform);
-
-            var sr = go.AddComponent<SpriteRenderer>();
-            sr.sprite = _backdropSprite;
-            sr.color = BackdropTint;
-            sr.sortingOrder = -100;
         }
 
         // ---------------------------------------------------------------- personagens
@@ -294,7 +561,7 @@ namespace HeavenlyWarrior.Prototype
         }
 
         /// <summary>Cria um inimigo com os pés em (x, groundY).</summary>
-        void SpawnEnemy(EnemyType type, float x, float groundY, bool dummy = false, float patrol = 3f)
+        void Enemy(EnemyType type, float x, float groundY, bool dummy = false, float patrol = 3f)
         {
             var size = type.Size;
             var go = CharacterBase(type.Name, new Vector2(x, groundY + size.y * 0.5f), size, type.MaxHealth, Team.Enemy);
@@ -323,13 +590,20 @@ namespace HeavenlyWarrior.Prototype
             ai.tintTarget = body;
             ai.animator = animator;
 
+            var health = go.GetComponent<Health>();
+            if (!dummy)
+            {
+                EnemiesTotal++;
+                health.Died += () => EnemiesDefeated++;
+            }
+
             // Barra de vida
             var barRoot = new GameObject("Barra de vida").transform;
             barRoot.SetParent(go.transform, false);
             barRoot.localPosition = new Vector3(0f, size.y * 0.5f + 0.35f, 0f);
             var bar = go.AddComponent<WorldHealthBar>();
             bar.width = Mathf.Max(0.9f, size.x);
-            bar.health = go.GetComponent<Health>();
+            bar.health = health;
             bar.background = PrototypeSprites.CreateRect(barRoot, "Fundo", Vector2.zero, new Vector2(bar.width + 0.06f, 0.14f),
                                                          new Color(0f, 0f, 0f, 0.7f), 20);
             bar.fill = PrototypeSprites.CreateRect(barRoot, "Vida", Vector2.zero, new Vector2(bar.width, 0.08f),
@@ -358,7 +632,8 @@ namespace HeavenlyWarrior.Prototype
             var follow = cam.GetComponent<CameraFollow>();
             if (follow == null) follow = cam.gameObject.AddComponent<CameraFollow>();
             follow.target = _player.transform;
-            follow.xLimits = CameraLimits;
+            follow.xLimits = _cameraLimits;
+            follow.yMin = 2.25f; // não desce atrás do jogador quando ele cai num buraco
             follow.SnapToTarget();
             return cam;
         }
