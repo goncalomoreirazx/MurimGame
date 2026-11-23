@@ -8,6 +8,7 @@ namespace HeavenlyWarrior.EditorTools
     /// - Resources/Characters: frames de personagens.
     /// - Resources/Levels: fundos e chão.
     /// - Resources/Props: portão, lanternas e orbes.
+    /// - Resources/Decor: árvores, arbustos, pedras e ruínas.
     /// Tudo como Sprite, 100 px por unidade, sem compressão, sem mipmaps e sem redimensionar.
     ///
     /// As imagens configuradas ficam marcadas; as que foram importadas antes deste script existir
@@ -19,16 +20,17 @@ namespace HeavenlyWarrior.EditorTools
     /// </summary>
     public class CharacterSpriteImporter : AssetPostprocessor
     {
-        // Funciona em qualquer sítio do projeto, desde que esteja numa pasta Resources/Characters, Resources/Levels ou Resources/Props.
+        // Funciona em qualquer sítio do projeto, desde que esteja numa pasta Resources/Characters, Resources/Levels, Resources/Props ou Resources/Decor.
         static bool IsGameArt(string path)
         {
             path = path.Replace('\\', '/');
-            return path.Contains("/Resources/Characters/") || path.Contains("/Resources/Levels/") || path.Contains("/Resources/Props/");
+            return path.Contains("/Resources/Characters/") || path.Contains("/Resources/Levels/") || path.Contains("/Resources/Props/") ||
+                   path.Contains("/Resources/Decor/");
         }
         const string Marker = "heavenly-warrior-art-v2";
 
         // Mudar este número faz o Unity reimportar as texturas com as regras novas.
-        public override uint GetVersion() => 3;
+        public override uint GetVersion() => 4;
 
         void OnPreprocessTexture()
         {

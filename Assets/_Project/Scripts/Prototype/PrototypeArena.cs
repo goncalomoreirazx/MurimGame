@@ -45,6 +45,14 @@ namespace HeavenlyWarrior.Prototype
         static readonly Color BackdropTint = new Color(0.78f, 0.8f, 0.88f);
         static readonly Color ToriiRed = new Color(0.62f, 0.12f, 0.1f);
         static readonly Color ToriiDark = new Color(0.18f, 0.08f, 0.08f);
+        /// <summary>Escurece as plataformas e a relva do chão para combinarem com o mapa noturno.</summary>
+        static readonly Color PlatformTint = new Color(0.6f, 0.65f, 0.78f);
+
+        // Imagem das plataformas (Levels/Forest/platform.png): pontas que não se repetem e altura da relva.
+        const float PlatformEndPixels = 30f;   // largura de cada ponta
+        const float PlatformWalkPixels = 42f;  // da parte de cima da imagem até onde se pisa
+        const float PlatformVisualHeight = 1.2f;
+        const float GrassPixels = 62f;         // faixa de relva usada por cima do chão
 
         enum BlockKind { Ground, Platform, Invisible }
 
@@ -58,7 +66,8 @@ namespace HeavenlyWarrior.Prototype
         Transform _level;
         PlayerController _player;
         PhysicsMaterial2D _noFriction;
-        Sprite _groundSprite, _ledgeSprite, _backdropSprite;
+        Sprite _groundSprite, _ledgeSprite, _backdropSprite, _platformSprite, _grassSprite;
+        LevelDecor _decor;
         Sprite[] _gateSprite, _lanternOff, _lanternOn, _orbFrames, _sparkleFrames;
 
         Vector2 _startSpawn;
@@ -100,6 +109,8 @@ namespace HeavenlyWarrior.Prototype
             _groundSprite = SpriteLoader.LoadCentered(LevelArt + "ground");
             _ledgeSprite = SpriteLoader.LoadCentered(LevelArt + "ledge");
             _backdropSprite = SpriteLoader.LoadCentered(LevelArt + "backdrop");
+            LoadPlatformSprites();
+            _decor = new LevelDecor();
 
             var bottom = new Vector2(0.5f, 0f);
             var center = new Vector2(0.5f, 0.5f);
@@ -203,7 +214,9 @@ namespace HeavenlyWarrior.Prototype
             _level.SetParent(transform, false);
 
             EnsureLight();
+            _decor.Begin(_level);
             BuildLayout();
+            Decorate();
 
             // Recomeçar depois de morrer: volta ao último checkpoint, que já fica aceso.
             for (int i = 0; i <= _checkpointIndex && i < _checkpoints.Count; i++) _checkpoints[i].Activate();
@@ -292,6 +305,106 @@ namespace HeavenlyWarrior.Prototype
             _player = SpawnPlayer(_startSpawn);
         }
 
+        /// <summary>
+        /// Decoração, segmento a segmento (x, altura do chão, altura da peça). Regras para não estragar a leitura:
+        /// árvores só lá atrás e escuras; nada em cima das plataformas; as silhuetas da frente ficam abaixo do caminho;
+        /// longe dos portões e das lanternas de checkpoint.
+        /// </summary>
+        void Decorate()
+        {
+            const DecorLayer Far = DecorLayer.Far, Back = DecorLayer.Back, Near = DecorLayer.Near, Front = DecorLayer.Front;
+            void D(string piece, float x, float y, float h, DecorLayer layer, bool flip = false) => _decor.Place(piece, x, y, h, layer, flip);
+
+            // 1. Início (-10 a 22)
+            D("tree_green", -7f, 0f, 5.4f, Far);
+            D("tree_pine_small", 5.5f, 0f, 4.2f, Far, true);
+            D("tree_willow", 16f, 0f, 5.2f, Far);
+            D("rock_big", -5.5f, 0f, 1.3f, Back);
+            D("rock_round", 7f, 0f, 0.8f, Back);
+            D("banner", 20f, 0f, 2.6f, Back);
+            D("bush_round", 4f, 0f, 0.75f, Near);
+            D("bush_grass", 12.5f, 0f, 0.55f, Near);
+            D("bush_flower", 17.5f, 0f, 0.75f, Near, true);
+            D("rock_pebble", 14f, 0f, 0.3f, Near);
+            D("fern_a", -5f, 0f, 1.1f, Front);
+            D("fern_b", 9f, 0f, 1f, Front, true);
+            D("fern_a", 18.5f, 0f, 1.1f, Front, true);
+
+            // 2. Depois do primeiro buraco (26 a 44)
+            D("tree_sakura", 31f, 0f, 5f, Far);
+            D("tree_bamboo", 40.5f, 0f, 5.2f, Far);
+            D("rock_tall", 28f, 0f, 1.6f, Back);
+            _decor.LampPost(37.5f, 0f);
+            D("bush_leafy", 33f, 0f, 0.7f, Near);
+            D("bush_grass", 42.5f, 0f, 0.5f, Near, true);
+            D("rock_small", 34.2f, 0f, 0.35f, Near);
+            D("fern_b", 30f, 0f, 1f, Front);
+            D("fern_a", 41f, 0f, 1.1f, Front);
+
+            // 3. Degrau de cima (44 a 60)
+            D("tree_pine", 47f, 1.5f, 5.6f, Far);
+            D("tree_green", 58f, 1.5f, 4.8f, Far, true);
+            D("ruin_pillar", 50f, 1.5f, 2f, Back);
+            D("ruin_arch", 56.5f, 1.5f, 2.6f, Back);
+            D("bush_round", 45.5f, 1.5f, 0.7f, Near, true);
+            D("rock_mossy", 53.3f, 1.5f, 0.45f, Near);
+            D("fern_b", 48f, 1.5f, 1f, Front, true);
+            D("fern_a", 58.5f, 1.5f, 1.1f, Front);
+
+            // 4. Depois do buraco grande, com o 1.º checkpoint em 78 (74 a 96)
+            D("tree_willow", 82f, 0f, 5.4f, Far, true);
+            D("tree_pine_small", 92f, 0f, 4.4f, Far);
+            _decor.StoneLantern(86.5f, 0f, tall: false);
+            D("fence", 89.5f, 0f, 1.05f, Back);
+            D("rock_round", 94.5f, 0f, 0.75f, Back, true);
+            D("bush_flower", 75.5f, 0f, 0.7f, Near);
+            D("bush_leafy", 80.5f, 0f, 0.65f, Near, true);
+            D("bush_grass", 95f, 0f, 0.5f, Near);
+            D("fern_a", 76f, 0f, 1.1f, Front);
+            D("fern_b", 88f, 0f, 1f, Front, true);
+
+            // 5. Depois da plataforma móvel (112 a 132)
+            D("tree_bamboo", 114.5f, 0.5f, 5f, Far, true);
+            D("tree_green", 122f, 0.5f, 5.2f, Far);
+            D("tree_sakura", 130f, 0.5f, 4.6f, Far, true);
+            D("rock_flat", 117f, 0.5f, 0.55f, Back);
+            D("banner", 129.5f, 0.5f, 2.4f, Back, true);
+            D("bush_round", 113.5f, 0.5f, 0.7f, Near);
+            D("rock_pebble", 120f, 0.5f, 0.3f, Near);
+            D("bush_grass", 124.5f, 0.5f, 0.5f, Near, true);
+            D("fern_b", 116f, 0.5f, 1f, Front);
+            D("fern_a", 127f, 0.5f, 1.1f, Front, true);
+
+            // 6. Pilares: só coisas pequenas, para não tapar os saltos
+            D("bush_leafy", 136.2f, 1.5f, 0.55f, Near);
+            D("rock_small", 144.8f, 3f, 0.35f, Near);
+            D("bush_grass", 151.5f, 1.5f, 0.45f, Near, true);
+
+            // 7. Reta final, com o 2.º checkpoint em 156, o golem e o portal em 193 (153 a 201)
+            D("tree_pine", 160.5f, 0f, 5.8f, Far);
+            D("tree_willow", 171f, 0f, 5.2f, Far, true);
+            D("tree_green", 178.5f, 0f, 5.6f, Far);
+            D("tree_pine_small", 186f, 0f, 4.4f, Far, true);
+            D("tree_bamboo", 198.5f, 0f, 5.2f, Far);
+            _decor.LampPost(162.5f, 0f);
+            D("ruin_arch", 172.5f, 0f, 2.6f, Back);
+            D("rock_big", 176.5f, 0f, 1.2f, Back, true);
+            D("ruin_pillar", 183.5f, 0f, 1.8f, Back);
+            D("banner", 186.5f, 0f, 2.6f, Back);
+            _decor.StoneLantern(189.2f, 0f, tall: true);
+            _decor.StoneLantern(196.8f, 0f, tall: true);
+            D("bush_flower", 158.5f, 0f, 0.7f, Near, true);
+            D("rock_pebble", 165f, 0f, 0.3f, Near);
+            D("bush_round", 169f, 0f, 0.7f, Near);
+            D("bush_grass", 180f, 0f, 0.5f, Near);
+            D("rock_mossy", 185f, 0f, 0.45f, Near);
+            D("bush_leafy", 199.5f, 0f, 0.65f, Near, true);
+            D("fern_a", 161f, 0f, 1.1f, Front);
+            D("fern_b", 174f, 0f, 1f, Front, true);
+            D("fern_a", 184f, 0f, 1.1f, Front, true);
+            D("fern_b", 198f, 0f, 1f, Front);
+        }
+
         // ---------------------------------------------------------------- peças do nível
 
         /// <summary>Bloco de chão de x0 a x1 com o topo à altura "top" (vai até lá abaixo).</summary>
@@ -340,11 +453,18 @@ namespace HeavenlyWarrior.Prototype
                         if (fill > 0f)
                             PrototypeSprites.CreateRect(go.transform, "Fundo", new Vector2(0f, -size.y * 0.5f + fill * 0.5f + 0.02f),
                                                         new Vector2(size.x, fill + 0.05f), GroundDeepColor, -1);
+                        // Orla de relva (a mesma das plataformas), para se ver bem onde acaba o chão.
+                        float grassScale = PlatformVisualHeight / (_platformSprite != null ? _platformSprite.bounds.size.y : 1f);
+                        TiledVisual(go.transform, _grassSprite, size, GrassPixels / 100f * grassScale,
+                                    PlatformWalkPixels / 100f * grassScale, 1, PlatformTint, 0.25f);
                     }
                     else ColorVisual(go.transform, size, GroundColor);
                     break;
                 case BlockKind.Platform:
-                    if (!TiledVisual(go.transform, _ledgeSprite, size, size.y + 0.25f, 0.1f, 1))
+                    float platformScale = PlatformVisualHeight / (_platformSprite != null ? _platformSprite.bounds.size.y : 1f);
+                    if (!TiledVisual(go.transform, _platformSprite, size, PlatformVisualHeight,
+                                     PlatformWalkPixels / 100f * platformScale, 1, PlatformTint, 0.3f) &&
+                        !TiledVisual(go.transform, _ledgeSprite, size, size.y + 0.25f, 0.1f, 1))
                         ColorVisual(go.transform, size, PlatformColor);
                     break;
             }
@@ -364,6 +484,11 @@ namespace HeavenlyWarrior.Prototype
         /// e topOverhang quanto ele sobe acima do topo do collider.
         /// </summary>
         bool TiledVisual(Transform parent, Sprite sprite, Vector2 size, float visualHeight, float topOverhang, int order)
+            => TiledVisual(parent, sprite, size, visualHeight, topOverhang, order, Color.white, 0f);
+
+        /// <summary>Igual, com uma cor e um pouco mais de largura do que o collider (extraWidth, no total).</summary>
+        bool TiledVisual(Transform parent, Sprite sprite, Vector2 size, float visualHeight, float topOverhang, int order,
+                         Color tint, float extraWidth)
         {
             if (sprite == null) return false;
             var go = new GameObject("Visual");
@@ -378,9 +503,34 @@ namespace HeavenlyWarrior.Prototype
             sr.sprite = sprite;
             sr.drawMode = SpriteDrawMode.Tiled;
             sr.tileMode = SpriteTileMode.Continuous;
-            sr.size = new Vector2(size.x / scale, sprite.bounds.size.y);
+            sr.size = new Vector2((size.x + extraWidth) / scale, sprite.bounds.size.y);
             sr.sortingOrder = order;
+            sr.color = tint;
             return true;
+        }
+
+        /// <summary>
+        /// A imagem da plataforma tem pontas arredondadas: o sprite é criado com bordas (9-slice), para
+        /// as pontas ficarem iguais e só o meio se repetir. A faixa de cima (a relva) é usada no chão.
+        /// </summary>
+        void LoadPlatformSprites()
+        {
+            var tex = Resources.Load<Texture2D>(LevelArt + "platform");
+            if (tex == null)
+            {
+                Debug.LogWarning($"[Heavenly Warrior] Não encontrei Resources/{LevelArt}platform. As plataformas usam a imagem antiga.");
+                return;
+            }
+            float end = Mathf.Min(PlatformEndPixels, tex.width * 0.25f);
+            var border = new Vector4(end, 0f, end, 0f);
+            _platformSprite = Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f),
+                                            CharacterSprites.PixelsPerUnit, 0, SpriteMeshType.FullRect, border);
+            _platformSprite.name = "platform";
+
+            float grass = Mathf.Min(GrassPixels, tex.height);
+            _grassSprite = Sprite.Create(tex, new Rect(0, tex.height - grass, tex.width, grass), new Vector2(0.5f, 0.5f),
+                                         CharacterSprites.PixelsPerUnit, 0, SpriteMeshType.FullRect, border);
+            _grassSprite.name = "platform_grass";
         }
 
         /// <summary>Portão: no início (o jogador começa à porta) e na meta (com o portal a brilhar lá dentro).</summary>

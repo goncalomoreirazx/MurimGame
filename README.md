@@ -43,6 +43,7 @@ Os valores de cada inimigo estão em `Assets/_Project/Scripts/Prototype/EnemyTyp
 - `Assets/_Project/Scripts/Player`: movimento (`PlayerController`), combo e hitboxes (`PlayerCombat`), animações (`PlayerAnimation`).
 - `Assets/_Project/Scripts/Enemies/EnemyAI.cs`: comportamento do inimigo.
 - `Assets/_Project/Scripts/Prototype/PrototypeArena.cs`: o nível de teste. O desenho do nível está todo no método `BuildLayout()` (chão, buracos, plataformas, orbes, checkpoints, inimigos). Desliga-se sozinho quando uma cena já tiver um `PlayerController`.
+- `Decorate()` no mesmo ficheiro: árvores, arbustos, pedras e ruínas do nível.
 - `Assets/_Project/Scripts/Level`: plataformas móveis, checkpoints, orbes de Qi e o portal da meta.
 - Todos os valores (velocidade, salto, dano, tempos dos golpes) aparecem no Inspector durante o Play: seleciona `Jogador` ou um inimigo na Hierarchy e ajusta. Atenção que as mudanças feitas em Play perdem-se ao sair.
 
@@ -65,3 +66,12 @@ Os valores de cada inimigo estão em `Assets/_Project/Scripts/Prototype/EnemyTyp
 - Original em `ArtSource/portao_lanternas_orbes.png`.
 - `Tools/slice_props.py` corta-o para `Resources/Props`: `Gate` (portão do início e da meta), `Lantern` (checkpoint por acender `off_*` e aceso `on_*`), `Orb` (orbe de Qi a rodar) e `Sparkle` (brilho ao apanhar).
 - Os tamanhos no mundo e as medidas da abertura do portão estão no topo de `PrototypeArena.cs` (`GateHeight`, `LanternHeight`, `OrbHeight`).
+
+### Decoração e plataformas (ambiente escuro)
+
+- Original em `ArtSource/ambiente_murim.png`.
+- `Tools/slice_decor.py` recorta-o (a imagem não tem transparência, por isso o script tira o xadrez de fundo) para `Resources/Decor` (árvores, arbustos, fetos, pedras, ruínas, lanternas de pedra, candeeiro, cerca, estandarte) e para `Resources/Levels/Forest/platform.png`.
+- As plataformas usam `platform.png` com as pontas fixas e o meio repetido; a relva de cima também faz a orla do chão.
+- A decoração está em camadas, todas escurecidas para o mapa continuar sombrio: árvores atrás do chão (as mais escuras), pedras e ruínas atrás dos personagens, arbustos no caminho e silhuetas quase pretas à frente, por baixo do caminho. As cores de cada camada estão no topo de `Prototype/LevelDecor.cs`.
+- Onde fica cada peça: método `Decorate()` em `PrototypeArena.cs` (nome da peça, x, altura do chão, altura da peça, camada). Se faltar uma imagem, essa peça não aparece e fica um aviso na Console.
+
