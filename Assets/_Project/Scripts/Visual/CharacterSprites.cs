@@ -102,5 +102,21 @@ namespace HeavenlyWarrior
             }
             return FromTexture(tex, new Vector2(0.5f, 0.5f));
         }
+
+        /// <summary>
+        /// Carrega todas as imagens de uma pasta de Resources cujo nome começa por "prefix",
+        /// ordenadas pelo nome (orb_00, orb_01...). Devolve um array vazio se não houver nenhuma.
+        /// </summary>
+        public static Sprite[] LoadFrames(string folder, string prefix, Vector2 pivot)
+        {
+            var textures = Resources.LoadAll<Texture2D>(folder);
+            var list = new System.Collections.Generic.List<Sprite>();
+            foreach (var tex in textures)
+                if (tex != null && tex.name.StartsWith(prefix)) list.Add(FromTexture(tex, pivot));
+            list.Sort((a, b) => string.CompareOrdinal(a.name, b.name));
+            if (list.Count == 0)
+                Debug.LogWarning($"[Heavenly Warrior] Não encontrei imagens '{prefix}*' em Resources/{folder}. Vou usar formas simples no lugar delas.");
+            return list.ToArray();
+        }
     }
 }

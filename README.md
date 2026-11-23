@@ -59,3 +59,9 @@ Os valores de cada inimigo estão em `Assets/_Project/Scripts/Prototype/EnemyTyp
 - Originais em `ArtSource/criaturas.png` e `ArtSource/floresta_mistica_luar.png`.
 - `Tools/slice_level1.py` corta as criaturas (Wolf, Jiangshi, Golem) para `Resources/Characters` e divide o fundo em três partes em `Resources/Levels/Forest`: `backdrop` (céu, montanhas e floresta, com parallax), `ground` (caminho e muro de pedra, repetido ao longo do chão) e `ledge` (topo do muro, usado nas plataformas).
 - O `CharacterSpriteImporter` também configura estas imagens ao entrarem no Unity.
+
+### Portão, lanternas e orbes
+
+- Original em `ArtSource/portao_lanternas_orbes.png`.
+- `Tools/slice_props.py` corta-o para `Resources/Props`: `Gate` (portão do início e da meta), `Lantern` (checkpoint por acender `off_*` e aceso `on_*`), `Orb` (orbe de Qi a rodar) e `Sparkle` (brilho ao apanhar).
+- Os tamanhos no mundo e as medidas da abertura do portão estão no topo de `PrototypeArena.cs` (`GateHeight`, `LanternHeight`, `OrbHeight`).
