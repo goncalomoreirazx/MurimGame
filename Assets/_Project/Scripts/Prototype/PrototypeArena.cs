@@ -23,6 +23,13 @@ namespace HeavenlyWarrior.Prototype
         public enum Outcome { Playing, Won, GameOver }
 
         const string LevelArt = "Levels/Forest/";
+        const string PropArt = "Props/";
+
+        // Tamanho dos adereços no mundo (unidades) e medidas da abertura do portão na imagem (px).
+        const float GateHeight = 5.6f, GateSink = 0.3f;
+        const float GateOpeningLeft = 290f, GateOpeningRight = 530f, GateOpeningBottom = 78f, GateOpeningTop = 518f;
+        const float LanternHeight = 2.0f;
+        const float OrbHeight = 0.85f;
         const float GroundBottom = -8f;   // fundo dos blocos de chão (bem abaixo do ecrã)
         const float KillY = -7f;          // abaixo disto, caiu num buraco
         const int FallDamage = 2;
@@ -52,6 +59,7 @@ namespace HeavenlyWarrior.Prototype
         PlayerController _player;
         PhysicsMaterial2D _noFriction;
         Sprite _groundSprite, _ledgeSprite, _backdropSprite;
+        Sprite[] _gateSprite, _lanternOff, _lanternOn, _orbFrames, _sparkleFrames;
 
         Vector2 _startSpawn;
         float _goalX;
@@ -92,6 +100,14 @@ namespace HeavenlyWarrior.Prototype
             _groundSprite = SpriteLoader.LoadCentered(LevelArt + "ground");
             _ledgeSprite = SpriteLoader.LoadCentered(LevelArt + "ledge");
             _backdropSprite = SpriteLoader.LoadCentered(LevelArt + "backdrop");
+
+            var bottom = new Vector2(0.5f, 0f);
+            var center = new Vector2(0.5f, 0.5f);
+            _gateSprite = SpriteLoader.LoadFrames(PropArt + "Gate", "gate", bottom);
+            _lanternOff = SpriteLoader.LoadFrames(PropArt + "Lantern", "off_", bottom);
+            _lanternOn = SpriteLoader.LoadFrames(PropArt + "Lantern", "on_", bottom);
+            _orbFrames = SpriteLoader.LoadFrames(PropArt + "Orb", "orb_", center);
+            _sparkleFrames = SpriteLoader.LoadFrames(PropArt + "Sparkle", "sparkle_", center);
             Build();
         }
 
@@ -220,7 +236,7 @@ namespace HeavenlyWarrior.Prototype
 
             // 1. Início: portão, boneco de treino para aquecer
             Ground(left, 22f, 0f);
-            Torii(-3f, 0f, portal: false);
+            Torii(0f, 0f, portal: false); // o jogador começa à porta
             _startSpawn = new Vector2(0f, PlayerSize.y * 0.5f);
             Enemy(EnemyType.Dummy, 10f, 0f, dummy: true);
             OrbLine(4f, 1.2f, 8f, 1.2f, 4);
@@ -367,13 +383,39 @@ namespace HeavenlyWarrior.Prototype
             return true;
         }
 
-        /// <summary>Portão torii: no início (sem portal) e na meta (com portal a brilhar).</summary>
+        /// <summary>Portão: no início (o jogador começa à porta) e na meta (com o portal a brilhar lá dentro).</summary>
         void Torii(float x, float groundY, bool portal)
         {
             var root = new GameObject(portal ? "Meta - Portal" : "Início - Portão").transform;
             root.SetParent(_level, false);
             root.position = new Vector3(x, groundY, 0f);
 
+            if (_gateSprite.Length > 0)
+            {
+                var gate = _gateSprite[0];
+                float scale = GateHeight / gate.bounds.size.y;
+                SpriteChild(root, "Portão", gate, new Vector2(0f, -GateSink), scale, 2);
+
+                if (portal)
+                {
+                    // Brilho atrás do portão, só na abertura (a imagem é transparente lá dentro).
+                    float ppu = gate.pixelsPerUnit;
+                    float imgWidth = gate.rect.width;
+                    float left = (GateOpeningLeft - imgWidth * 0.5f) / ppu * scale;
+                    float right = (GateOpeningRight - imgWidth * 0.5f) / ppu * scale;
+                    float bottom = -GateSink + GateOpeningBottom / ppu * scale;
+                    float top = -GateSink + GateOpeningTop / ppu * scale;
+                    var size = new Vector2(right - left + 0.1f, top - bottom + 0.1f);
+                    var mid = new Vector2((left + right) * 0.5f, (top + bottom) * 0.5f);
+                    var glow = PrototypeSprites.CreateRect(root, "Portal", mid, size, new Color(0.55f, 0.9f, 1f, 0.6f), 1);
+                    PrototypeSprites.CreateRect(root, "Núcleo", mid, new Vector2(size.x * 0.45f, size.y * 0.85f),
+                                                new Color(0.9f, 1f, 1f, 0.35f), 1);
+                    root.gameObject.AddComponent<GoalPortal>().glow = glow;
+                }
+                return;
+            }
+
+            // Sem sprite: torii feito de retângulos
             const float halfSpan = 1.6f, height = 4.2f;
             PrototypeSprites.CreateRect(root, "Pilar esq", new Vector2(-halfSpan, height * 0.5f), new Vector2(0.35f, height), ToriiRed, 2);
             PrototypeSprites.CreateRect(root, "Pilar dir", new Vector2(halfSpan, height * 0.5f), new Vector2(0.35f, height), ToriiRed, 2);
@@ -388,8 +430,7 @@ namespace HeavenlyWarrior.Prototype
                                                        new Color(0.55f, 0.9f, 1f, 0.55f), 1);
                 PrototypeSprites.CreateRect(root, "Núcleo", new Vector2(0f, (height - 0.8f) * 0.5f),
                                             new Vector2(1.2f, height - 1.4f), new Color(0.9f, 1f, 1f, 0.35f), 1);
-                var gp = root.gameObject.AddComponent<GoalPortal>();
-                gp.glow = glow;
+                root.gameObject.AddComponent<GoalPortal>().glow = glow;
             }
         }
 
@@ -400,15 +441,24 @@ namespace HeavenlyWarrior.Prototype
             root.SetParent(_level, false);
             root.position = new Vector3(x, groundY, 0f);
 
-            var stone = new Color(0.42f, 0.42f, 0.48f);
-            PrototypeSprites.CreateRect(root, "Base", new Vector2(0f, 0.12f), new Vector2(0.6f, 0.25f), stone * 0.8f, 2);
-            PrototypeSprites.CreateRect(root, "Pilar", new Vector2(0f, 0.7f), new Vector2(0.22f, 0.95f), stone, 2);
-            PrototypeSprites.CreateRect(root, "Caixa", new Vector2(0f, 1.4f), new Vector2(0.6f, 0.5f), stone, 2);
-            var flame = PrototypeSprites.CreateRect(root, "Chama", new Vector2(0f, 1.4f), new Vector2(0.3f, 0.3f), Color.gray, 3);
-            PrototypeSprites.CreateRect(root, "Telhado", new Vector2(0f, 1.72f), new Vector2(0.85f, 0.16f), stone * 0.7f, 3);
-
             var cp = root.gameObject.AddComponent<Checkpoint>();
-            cp.flame = flame;
+            if (_lanternOff.Length > 0)
+            {
+                float scale = LanternHeight / _lanternOff[0].bounds.size.y;
+                cp.body = SpriteChild(root, "Lanterna", _lanternOff[0], new Vector2(0f, -0.1f), scale, 3);
+                cp.offFrames = _lanternOff;
+                cp.onFrames = _lanternOn.Length > 0 ? _lanternOn : _lanternOff;
+            }
+            else
+            {
+                var stone = new Color(0.42f, 0.42f, 0.48f);
+                PrototypeSprites.CreateRect(root, "Base", new Vector2(0f, 0.12f), new Vector2(0.6f, 0.25f), stone * 0.8f, 2);
+                PrototypeSprites.CreateRect(root, "Pilar", new Vector2(0f, 0.7f), new Vector2(0.22f, 0.95f), stone, 2);
+                PrototypeSprites.CreateRect(root, "Caixa", new Vector2(0f, 1.4f), new Vector2(0.6f, 0.5f), stone, 2);
+                cp.flame = PrototypeSprites.CreateRect(root, "Chama", new Vector2(0f, 1.4f), new Vector2(0.3f, 0.3f), Color.gray, 3);
+                PrototypeSprites.CreateRect(root, "Telhado", new Vector2(0f, 1.72f), new Vector2(0.85f, 0.16f), stone * 0.7f, 3);
+            }
+
             _checkpoints.Add(cp);
             _checkpointSpawns.Add(new Vector2(x + 1f, groundY + PlayerSize.y * 0.5f));
         }
@@ -418,9 +468,34 @@ namespace HeavenlyWarrior.Prototype
             var go = new GameObject("Orbe de Qi");
             go.transform.SetParent(_level, false);
             go.transform.position = position;
-            PrototypeSprites.CreateRect(go.transform, "Brilho", Vector2.zero, new Vector2(0.34f, 0.34f), new Color(0.45f, 0.8f, 1f, 0.9f), 8);
-            PrototypeSprites.CreateRect(go.transform, "Centro", Vector2.zero, new Vector2(0.14f, 0.14f), new Color(0.95f, 1f, 1f), 9);
-            _orbs.Add(go.AddComponent<QiOrb>());
+            var orb = go.AddComponent<QiOrb>();
+
+            if (_orbFrames.Length > 0)
+            {
+                float scale = OrbHeight / _orbFrames[0].bounds.size.y;
+                orb.body = SpriteChild(go.transform, "Orbe", _orbFrames[0], Vector2.zero, scale, 30);
+                orb.frames = _orbFrames;
+                orb.sparkleFrames = _sparkleFrames;
+            }
+            else
+            {
+                PrototypeSprites.CreateRect(go.transform, "Brilho", Vector2.zero, new Vector2(0.34f, 0.34f), new Color(0.45f, 0.8f, 1f, 0.9f), 30);
+                PrototypeSprites.CreateRect(go.transform, "Centro", Vector2.zero, new Vector2(0.14f, 0.14f), new Color(0.95f, 1f, 1f), 31);
+            }
+            _orbs.Add(orb);
+        }
+
+        /// <summary>Filho com um sprite, numa escala uniforme.</summary>
+        static SpriteRenderer SpriteChild(Transform parent, string name, Sprite sprite, Vector2 localPos, float scale, int order)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = new Vector3(scale, scale, 1f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            sr.sortingOrder = order;
+            return sr;
         }
 
         void OrbLine(float x0, float y0, float x1, float y1, int count)
