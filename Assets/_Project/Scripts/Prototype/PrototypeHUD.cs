@@ -46,6 +46,13 @@ namespace HeavenlyWarrior.Prototype
 
             DrawProgress(scale);
 
+            if (CharacterSprites.Missing.Count > 0)
+            {
+                GUI.Label(new Rect(x, y + h + 34 * scale, Screen.width - 40 * scale, 26 * scale),
+                          "<color=#ffb347>Sem sprites para: " + string.Join(", ", CharacterSprites.Missing) +
+                          " (ver a Console)</color>", _small);
+            }
+
             if (showControls && _arena.State == PrototypeArena.Outcome.Playing)
             {
                 GUI.Label(new Rect(x, Screen.height - 48 * scale, Screen.width, 44 * scale),
