@@ -12,6 +12,8 @@ namespace HeavenlyWarrior
         public float smoothTime = 0.15f;
         [Tooltip("Limites horizontais da câmara (min, max). Iguais = sem limite.")]
         public Vector2 xLimits = Vector2.zero;
+        [Tooltip("Altura mínima da câmara: ao cair num buraco a câmara não desce atrás do jogador.")]
+        public float yMin = float.NegativeInfinity;
 
         static CameraFollow _main;
         Vector3 _velocity;
@@ -44,6 +46,7 @@ namespace HeavenlyWarrior
                                    target.position.y + offset.y,
                                    transform.position.z);
             if (xLimits.x < xLimits.y) goal.x = Mathf.Clamp(goal.x, xLimits.x, xLimits.y);
+            goal.y = Mathf.Max(goal.y, yMin);
             return goal;
         }
 

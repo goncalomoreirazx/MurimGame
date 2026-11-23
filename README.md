@@ -14,7 +14,11 @@ O repositório ainda não tem os ficheiros do projeto Unity (`ProjectSettings`, 
 ## Testar o protótipo
 
 1. Abre qualquer cena (a `SampleScene` do template serve) e carrega em **Play**.
-2. O primeiro nível de teste (Floresta Mística ao Luar) é montado sozinho: fundo com parallax, chão de pedra, plataformas, o jogador (espadachim azul), um boneco de treino e as criaturas: 2 lobos, 2 jiangshi e um golem no fim.
+2. O nível 1 (Floresta Mística ao Luar) é montado sozinho, como um nível de plataformas clássico: começas no portão vermelho à esquerda e tens de chegar ao portal azul no fim, à direita.
+   - Pelo caminho há buracos, plataformas (uma delas móvel), pilares, orbes de Qi para apanhar e duas lanternas de checkpoint que acendem quando passas.
+   - Cair num buraco tira 2 de vida e volta ao último checkpoint. Se morreres, R recomeça do último checkpoint.
+   - Os inimigos estão espalhados: um boneco de treino no início, lobos, jiangshi e o golem a guardar o portal.
+   - Ao chegar ao portal aparece o ecrã de vitória com o tempo, as orbes, os inimigos derrotados e as quedas. R joga outra vez desde o início.
 
 | Ação | Teclado | Comando |
 |---|---|---|
@@ -22,7 +26,7 @@ O repositório ainda não tem os ficheiros do projeto Unity (`ProjectSettings`, 
 | Saltar (2x no ar) | Espaço, W ou seta cima | A |
 | Atacar (combo de 3) | J ou clique esquerdo | X |
 | Dash (invencível) | Shift esquerdo ou L | B ou RB |
-| Recomeçar | R (depois de morrer ou limpar a arena) | Start |
+| Recomeçar | R (depois de morrer ou de chegar ao portal) | Start |
 
 Os inimigos patrulham, perseguem quando te veem e ficam avermelhados antes de atacar (é a altura de fugir ou dar dash).
 
@@ -38,7 +42,8 @@ Os valores de cada inimigo estão em `Assets/_Project/Scripts/Prototype/EnemyTyp
 
 - `Assets/_Project/Scripts/Player`: movimento (`PlayerController`), combo e hitboxes (`PlayerCombat`), animações (`PlayerAnimation`).
 - `Assets/_Project/Scripts/Enemies/EnemyAI.cs`: comportamento do inimigo.
-- `Assets/_Project/Scripts/Prototype/PrototypeArena.cs`: o nível de teste. Desliga-se sozinho quando uma cena já tiver um `PlayerController`.
+- `Assets/_Project/Scripts/Prototype/PrototypeArena.cs`: o nível de teste. O desenho do nível está todo no método `BuildLayout()` (chão, buracos, plataformas, orbes, checkpoints, inimigos). Desliga-se sozinho quando uma cena já tiver um `PlayerController`.
+- `Assets/_Project/Scripts/Level`: plataformas móveis, checkpoints, orbes de Qi e o portal da meta.
 - Todos os valores (velocidade, salto, dano, tempos dos golpes) aparecem no Inspector durante o Play: seleciona `Jogador` ou um inimigo na Hierarchy e ajusta. Atenção que as mudanças feitas em Play perdem-se ao sair.
 
 ## Sprites e cenário

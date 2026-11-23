@@ -49,6 +49,9 @@ namespace HeavenlyWarrior
         /// <summary>Pode atacar/dar dash/mudar de direção.</summary>
         public bool CanAct => !IsDashing && !IsStunned && !_health.IsDead;
 
+        /// <summary>Desligado durante o ecrã de vitória ou cenas: o jogador fica parado.</summary>
+        [System.NonSerialized] public bool ControlsEnabled = true;
+
         /// <summary>Posição para onde o jogador volta ao recomeçar.</summary>
         public Vector2 SpawnPoint { get; set; }
 
@@ -104,9 +107,11 @@ namespace HeavenlyWarrior
 
         void Update()
         {
-            if (_health.IsDead)
+            if (_health.IsDead || !ControlsEnabled)
             {
                 _moveInput = 0f;
+                _jumpHeld = false;
+                _jumpBufferTimer = 0f;
                 return;
             }
 
@@ -131,7 +136,13 @@ namespace HeavenlyWarrior
             float dt = Time.fixedDeltaTime;
             var v = _rb.GetVelocity();
 
-            IsGrounded = v.y <= 0.1f && CheckGround();
+            var ground = v.y <= 0.1f ? FindGround() : null;
+            IsGrounded = ground != null;
+
+            // Plataformas móveis levam o jogador com elas
+            var platform = ground != null ? ground.GetComponent<MovingPlatform>() : null;
+            if (platform != null) _rb.position += platform.Velocity * dt;
+
             if (IsGrounded)
             {
                 _coyoteTimer = coyoteTime;
@@ -254,12 +265,12 @@ namespace HeavenlyWarrior
             return true;
         }
 
-        bool CheckGround()
+        Collider2D FindGround()
         {
             Bounds b = _col.bounds;
             var center = new Vector2(b.center.x, b.min.y - 0.04f);
             var size = new Vector2(b.size.x * 0.9f, 0.08f);
-            return PhysicsUtil.IsSolid(center, size, _col);
+            return PhysicsUtil.FindSolid(center, size, _col);
         }
 
         public void SetFacing(int dir)
@@ -299,6 +310,19 @@ namespace HeavenlyWarrior
             if (_combat != null) _combat.CancelAttack();
             _rb.SetVelocity(info.Knockback);
             CameraFollow.Shake(0.15f, 0.15f);
+        }
+
+        /// <summary>Põe o jogador numa posição, parado, sem mexer na vida (usado depois de cair num buraco).</summary>
+        public void Teleport(Vector2 position)
+        {
+            transform.position = position;
+            _rb.position = position;
+            _rb.SetVelocity(Vector2.zero);
+            _dashTimer = 0f;
+            _stunTimer = 0f;
+            _lungeTimer = 0f;
+            _health.ExtraInvulnerable = false;
+            if (_combat != null) _combat.CancelAttack();
         }
 
         /// <summary>Volta ao ponto inicial com a vida cheia.</summary>

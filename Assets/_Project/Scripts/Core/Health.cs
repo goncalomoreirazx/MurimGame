@@ -72,6 +72,17 @@ namespace HeavenlyWarrior
             return true;
         }
 
+        /// <summary>Tira vida sem empurrão nem invencibilidade (por exemplo, cair num buraco).</summary>
+        public void LoseHealth(int amount)
+        {
+            if (IsDead || amount <= 0) return;
+            Current = Mathf.Max(0, Current - amount);
+            if (Current == 0) Died?.Invoke();
+        }
+
+        /// <summary>Dá invencibilidade durante uns segundos (por exemplo, depois de voltar a um checkpoint).</summary>
+        public void GrantInvulnerability(float seconds) => _invulnerableUntil = Mathf.Max(_invulnerableUntil, Time.time + seconds);
+
         public void ResetHealth()
         {
             Current = maxHealth;

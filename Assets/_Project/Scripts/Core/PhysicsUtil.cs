@@ -30,7 +30,10 @@ namespace HeavenlyWarrior
         /// Devolve true se existir chão ou parede sólida dentro da caixa.
         /// Ignora triggers, o próprio collider e personagens (tudo o que tem Health).
         /// </summary>
-        public static bool IsSolid(Vector2 center, Vector2 size, Collider2D self)
+        public static bool IsSolid(Vector2 center, Vector2 size, Collider2D self) => FindSolid(center, size, self) != null;
+
+        /// <summary>Como IsSolid, mas devolve o collider encontrado (ou null).</summary>
+        public static Collider2D FindSolid(Vector2 center, Vector2 size, Collider2D self)
         {
             var filter = new ContactFilter2D();
             filter.useTriggers = false;
@@ -40,9 +43,9 @@ namespace HeavenlyWarrior
             {
                 if (c == null || c == self) continue;
                 if (c.GetComponentInParent<Health>() != null) continue;
-                return true;
+                return c;
             }
-            return false;
+            return null;
         }
 
         /// <summary>Devolve todos os Health dentro da caixa (cada um só uma vez).</summary>
