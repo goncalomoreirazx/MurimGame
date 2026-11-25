@@ -11,6 +11,11 @@ versões do mesmo tamanho:
   qi_lit.png    só as 7 orbes acesas
   panel.png     moldura dourada para os ecrãs de vitória e derrota
   orb_icon.png  orbe pequena
+Da segunda folha (ArtSource/interface_topo.png) sai a barra do mapa no topo do ecrã:
+  map_frame.png   moldura com a paisagem
+  map_start.png   portão do início       map_goal.png   portão da meta
+  map_lantern_off.png / map_lantern_on.png  checkpoints por acender e acesos
+  map_player.png  marcador do jogador
 As posições das barras e das casas (em píxeis destas imagens) estão no topo de Prototype/HudArt.cs:
 se mudares as caixas aqui, atualiza-as lá.
 
@@ -73,6 +78,17 @@ def split(part, mask, dark):
     return empty, only
 
 
+TOP_SRC = os.path.join(ROOT, "ArtSource", "interface_topo.png")
+TOP_PIECES = {
+    "map_frame": (18, 38, 1519, 258),
+    "map_lantern_off": (50, 285, 174, 481),
+    "map_lantern_on": (420, 287, 559, 481),
+    "map_player": (1023, 329, 1124, 474),
+    "map_start": (35, 525, 376, 781),
+    "map_goal": (401, 533, 652, 781),
+}
+
+
 def main():
     os.makedirs(OUT, exist_ok=True)
     a = np.array(Image.open(SRC).convert("RGBA"))
@@ -106,6 +122,13 @@ def main():
 
     save(crop(a, PANEL_BOX), "panel.png")
     save(crop(a, ORB_BOX), "orb_icon.png")
+
+    if os.path.exists(TOP_SRC):
+        top = np.array(Image.open(TOP_SRC).convert("RGBA"))
+        for name, box in TOP_PIECES.items():
+            save(crop(top, box), name + ".png")
+    else:
+        print("  (sem", TOP_SRC, "- não fiz a barra do mapa)")
 
     # Medidas para o HudArt.cs (relativas a cada imagem)
     def rel(box, o):

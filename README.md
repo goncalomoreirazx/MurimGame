@@ -71,7 +71,9 @@ Os valores de cada inimigo estão em `Assets/_Project/Scripts/Prototype/EnemyTyp
 
 - Original em `ArtSource/ambiente_murim.png`.
 - `Tools/slice_decor.py` recorta-o (a imagem não tem transparência, por isso o script tira o xadrez de fundo) para `Resources/Decor` (árvores, arbustos, fetos, pedras, ruínas, lanternas de pedra, candeeiro, cerca, estandarte) e para `Resources/Levels/Forest/platform.png`.
-- As plataformas usam `platform.png` com as pontas fixas e o meio repetido; a relva de cima também faz a orla do chão.
+- O chão e as plataformas usam as mesmas peças:
+  - `platform.png` (relva com pedras) por cima, com as pontas arredondadas nos buracos e o meio refeito pelo script para se repetir sem emendas;
+  - `ground_body.png` por baixo: pedras desenhadas pelo script com as cores da plataforma, que se repetem nas duas direções e escurecem até ao preto.
 - A decoração está em camadas, todas escurecidas para o mapa continuar sombrio: árvores atrás do chão (as mais escuras), pedras e ruínas atrás dos personagens, arbustos no caminho e silhuetas quase pretas à frente, por baixo do caminho. As cores de cada camada estão no topo de `Prototype/LevelDecor.cs`.
 - Onde fica cada peça: método `Decorate()` em `PrototypeArena.cs` (nome da peça, x, altura do chão, altura da peça, camada). Se faltar uma imagem, essa peça não aparece e fica um aviso na Console.
 
@@ -83,4 +85,10 @@ Os valores de cada inimigo estão em `Assets/_Project/Scripts/Prototype/EnemyTyp
 - Canto direito: painel das orbes. As 7 casas acendem à medida que apanhas o Qi do nível, com o número e o tempo por baixo.
 - Os ecrãs de vitória e de derrota usam a moldura dourada.
 - As medidas das barras (em píxeis) estão no topo de `Prototype/HudArt.cs`. Se faltar alguma imagem, o HUD volta às barras simples.
+
+### Barra do mapa (topo do ecrã)
+
+- Original em `ArtSource/interface_topo.png`; o `Tools/slice_hud.py` também corta esta folha para `Resources/UI` (`map_*.png`).
+- Mostra o portão do início, as lanternas dos checkpoints (acendem quando passas por elas), o portão da meta e o marcador do jogador a andar pelo caminho.
+- Se faltar a moldura ou o marcador, volta a linha simples de antes. Medidas em `Prototype/HudArt.cs` (`MapTrackLeft`, `MapTrackRight`, `MapBaseline`).
 

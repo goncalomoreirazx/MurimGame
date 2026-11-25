@@ -20,7 +20,14 @@ namespace HeavenlyWarrior.Prototype
         /// <summary>Bordas da moldura dourada que não esticam (esquerda, cima, direita, baixo).</summary>
         public static readonly Vector4 PanelBorder = new Vector4(75f, 70f, 75f, 50f);
 
+        /// <summary>Barra do mapa (map_frame.png): onde começa e acaba o caminho e a linha onde assentam os ícones.</summary>
+        public const float MapTrackLeft = 175f, MapTrackRight = 1325f, MapBaseline = 168f;
+
         public Texture2D HpFrame, HpFill, QiFill, QiPanel, QiLit, Panel, OrbIcon;
+        public Texture2D MapFrame, MapStart, MapGoal, MapLanternOff, MapLanternOn, MapPlayer;
+
+        /// <summary>A barra do mapa só aparece se houver a moldura e o marcador do jogador.</summary>
+        public bool MapReady => MapFrame != null && MapPlayer != null;
 
         public bool Ready => HpFrame != null && HpFill != null && QiFill != null && QiPanel != null && QiLit != null;
 
@@ -35,6 +42,12 @@ namespace HeavenlyWarrior.Prototype
                 QiLit = Get("qi_lit"),
                 Panel = Get("panel"),
                 OrbIcon = Get("orb_icon"),
+                MapFrame = Get("map_frame"),
+                MapStart = Get("map_start"),
+                MapGoal = Get("map_goal"),
+                MapLanternOff = Get("map_lantern_off"),
+                MapLanternOn = Get("map_lantern_on"),
+                MapPlayer = Get("map_player"),
             };
             if (!art.Ready)
                 Debug.LogWarning($"[Heavenly Warrior] Faltam imagens do HUD em Resources/{Folder}. Vou usar as barras simples.");

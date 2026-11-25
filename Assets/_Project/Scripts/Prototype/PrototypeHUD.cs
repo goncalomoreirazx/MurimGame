@@ -216,6 +216,11 @@ namespace HeavenlyWarrior.Prototype
         {
             float room = Screen.width - 2f * Mathf.Max(leftWidth, rightWidth) - 60f * scale;
             float w = Mathf.Min(420f * scale, Screen.width * 0.4f, room);
+            if (_art.MapReady)
+            {
+                float mw = Mathf.Min(520f * scale, Screen.width - 2f * Mathf.Max(leftWidth, rightWidth) - 20f * scale);
+                if (mw >= 160f * scale) { DrawMap(mw); return; }
+            }
             if (w < 80f * scale) return; // ecrã estreito: não cabe
             float x = (Screen.width - w) * 0.5f, y = 26f * scale;
             float start = _arena.LevelStartX, end = _arena.LevelGoalX;
@@ -231,6 +236,46 @@ namespace HeavenlyWarrior.Prototype
 
             float p = Mathf.InverseLerp(start, end, _arena.Player.transform.position.x);
             DrawRect(new Rect(x + w * p - 6 * scale, y - 5 * scale, 12 * scale, 14 * scale), new Color(0.35f, 0.65f, 1f));
+        }
+
+        /// <summary>
+        /// Barra do mapa no topo: paisagem com o portão do início, as lanternas dos checkpoints
+        /// (acendem quando passas), o portão da meta e o marcador do jogador.
+        /// </summary>
+        void DrawMap(float w)
+        {
+            var frameTex = _art.MapFrame;
+            float h = w * frameTex.height / frameTex.width;
+            var frame = new Rect((Screen.width - w) * 0.5f, 4f, w, h);
+            GUI.DrawTexture(frame, frameTex);
+
+            float k = w / frameTex.width;
+            float left = frame.x + HudArt.MapTrackLeft * k, right = frame.x + HudArt.MapTrackRight * k;
+            float baseY = frame.y + HudArt.MapBaseline * k;
+            float start = _arena.LevelStartX, end = _arena.LevelGoalX;
+            float X(float worldX) => Mathf.Lerp(left, right, Mathf.InverseLerp(start, end, worldX));
+
+            // Caminho já percorrido: linha fina dourada
+            float p = Mathf.InverseLerp(start, end, _arena.Player.transform.position.x);
+            DrawRect(new Rect(left, baseY - 1f, right - left, 2f), new Color(0f, 0f, 0f, 0.45f));
+            DrawRect(new Rect(left, baseY - 1f, (right - left) * p, 2f), new Color(1f, 0.78f, 0.4f, 0.8f));
+
+            Icon(_art.MapStart, left, baseY, h * 0.42f);
+            Icon(_art.MapGoal, right, baseY, h * 0.46f);
+            foreach (var cp in _arena.Checkpoints)
+                Icon(cp.IsActive ? _art.MapLanternOn : _art.MapLanternOff, X(cp.transform.position.x), baseY, h * 0.34f);
+
+            // Jogador: sobe e desce um pouco para se ver bem
+            float bob = Mathf.Sin(Time.unscaledTime * 4f) * h * 0.02f;
+            Icon(_art.MapPlayer, Mathf.Lerp(left, right, p), baseY - h * 0.04f + bob, h * 0.36f);
+        }
+
+        /// <summary>Ícone com a base em (x, baseY) e a altura dada.</summary>
+        static void Icon(Texture2D tex, float x, float baseY, float height)
+        {
+            if (tex == null) return;
+            float width = height * tex.width / tex.height;
+            GUI.DrawTexture(new Rect(x - width * 0.5f, baseY - height, width, height), tex);
         }
 
         void Panel(float scale, string title, string body)
