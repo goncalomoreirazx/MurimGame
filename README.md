@@ -75,3 +75,12 @@ Os valores de cada inimigo estão em `Assets/_Project/Scripts/Prototype/EnemyTyp
 - A decoração está em camadas, todas escurecidas para o mapa continuar sombrio: árvores atrás do chão (as mais escuras), pedras e ruínas atrás dos personagens, arbustos no caminho e silhuetas quase pretas à frente, por baixo do caminho. As cores de cada camada estão no topo de `Prototype/LevelDecor.cs`.
 - Onde fica cada peça: método `Decorate()` em `PrototypeArena.cs` (nome da peça, x, altura do chão, altura da peça, camada). Se faltar uma imagem, essa peça não aparece e fica um aviso na Console.
 
+### HUD (vida e Qi)
+
+- Original em `ArtSource/interface_hud.png`.
+- `Tools/slice_hud.py` corta-o para `Resources/UI`. Cada barra sai em duas imagens do mesmo tamanho (a moldura vazia e só o enchimento), e o jogo desenha o enchimento até onde for preciso.
+- Canto esquerdo: retrato com a barra vermelha (vida, com um rasto claro quando levas dano e a piscar quando estás quase a morrer) e a azul (Qi apanhado no nível).
+- Canto direito: painel das orbes. As 7 casas acendem à medida que apanhas o Qi do nível, com o número e o tempo por baixo.
+- Os ecrãs de vitória e de derrota usam a moldura dourada.
+- As medidas das barras (em píxeis) estão no topo de `Prototype/HudArt.cs`. Se faltar alguma imagem, o HUD volta às barras simples.
+

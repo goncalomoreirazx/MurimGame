@@ -9,7 +9,8 @@ namespace HeavenlyWarrior.EditorTools
     /// - Resources/Levels: fundos e chão.
     /// - Resources/Props: portão, lanternas e orbes.
     /// - Resources/Decor: árvores, arbustos, pedras e ruínas.
-    /// Tudo como Sprite, 100 px por unidade, sem compressão, sem mipmaps e sem redimensionar.
+    /// - Resources/UI: HUD (estas com mipmaps, por aparecerem reduzidas).
+    /// Tudo como Sprite, 100 px por unidade, sem compressão, sem mipmaps (exceto o HUD) e sem redimensionar.
     ///
     /// As imagens configuradas ficam marcadas; as que foram importadas antes deste script existir
     /// (por exemplo, quando havia erros de compilação) são corrigidas na importação seguinte.
@@ -20,17 +21,23 @@ namespace HeavenlyWarrior.EditorTools
     /// </summary>
     public class CharacterSpriteImporter : AssetPostprocessor
     {
-        // Funciona em qualquer sítio do projeto, desde que esteja numa pasta Resources/Characters, Resources/Levels, Resources/Props ou Resources/Decor.
+        // Funciona em qualquer sítio do projeto, desde que esteja numa pasta Resources/Characters, Resources/Levels, Resources/Props, Resources/Decor ou Resources/UI.
         static bool IsGameArt(string path)
         {
             path = path.Replace('\\', '/');
             return path.Contains("/Resources/Characters/") || path.Contains("/Resources/Levels/") || path.Contains("/Resources/Props/") ||
-                   path.Contains("/Resources/Decor/");
+                   path.Contains("/Resources/Decor/") || IsUiArt(path);
+        }
+
+        // Imagens do HUD: ficam com mipmaps, porque aparecem mais pequenas do que o original.
+        static bool IsUiArt(string path)
+        {
+            return path.Replace('\\', '/').Contains("/Resources/UI/");
         }
         const string Marker = "heavenly-warrior-art-v2";
 
         // Mudar este número faz o Unity reimportar as texturas com as regras novas.
-        public override uint GetVersion() => 4;
+        public override uint GetVersion() => 5;
 
         void OnPreprocessTexture()
         {
@@ -42,7 +49,7 @@ namespace HeavenlyWarrior.EditorTools
             importer.textureType = TextureImporterType.Sprite;
             importer.spriteImportMode = SpriteImportMode.Single;
             importer.spritePixelsPerUnit = 100f;
-            importer.mipmapEnabled = false;
+            importer.mipmapEnabled = IsUiArt(assetPath);
             importer.alphaIsTransparency = true;
             importer.textureCompression = TextureImporterCompression.Uncompressed;
             importer.npotScale = TextureImporterNPOTScale.None;
