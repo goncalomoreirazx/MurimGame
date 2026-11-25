@@ -47,12 +47,13 @@ namespace HeavenlyWarrior.Prototype
         static readonly Color ToriiDark = new Color(0.18f, 0.08f, 0.08f);
         /// <summary>Escurece as plataformas e a relva do chão para combinarem com o mapa noturno.</summary>
         static readonly Color PlatformTint = new Color(0.6f, 0.65f, 0.78f);
+        /// <summary>Pedras do corpo do chão: mais escuras do que o topo, para o caminho se destacar.</summary>
+        static readonly Color GroundBodyTint = new Color(0.3f, 0.32f, 0.43f);
 
         // Imagem das plataformas (Levels/Forest/platform.png): pontas que não se repetem e altura da relva.
         const float PlatformEndPixels = 30f;   // largura de cada ponta
         const float PlatformWalkPixels = 42f;  // da parte de cima da imagem até onde se pisa
         const float PlatformVisualHeight = 1.2f;
-        const float GrassPixels = 62f;         // faixa de relva usada por cima do chão
 
         enum BlockKind { Ground, Platform, Invisible }
 
@@ -66,7 +67,7 @@ namespace HeavenlyWarrior.Prototype
         Transform _level;
         PlayerController _player;
         PhysicsMaterial2D _noFriction;
-        Sprite _groundSprite, _ledgeSprite, _backdropSprite, _platformSprite, _grassSprite;
+        Sprite _groundSprite, _ledgeSprite, _backdropSprite, _platformSprite, _groundBodySprite;
         LevelDecor _decor;
         Sprite[] _gateSprite, _lanternOff, _lanternOn, _orbFrames, _sparkleFrames;
 
@@ -110,6 +111,7 @@ namespace HeavenlyWarrior.Prototype
             _ledgeSprite = SpriteLoader.LoadCentered(LevelArt + "ledge");
             _backdropSprite = SpriteLoader.LoadCentered(LevelArt + "backdrop");
             LoadPlatformSprites();
+            _groundBodySprite = SpriteLoader.LoadCentered(LevelArt + "ground_body");
             _decor = new LevelDecor();
 
             var bottom = new Vector2(0.5f, 0f);
@@ -445,20 +447,20 @@ namespace HeavenlyWarrior.Prototype
             switch (kind)
             {
                 case BlockKind.Ground:
-                    // Faixa de caminho + muro de pedra no topo; por baixo, escuro até ao fundo.
-                    const float stripHeight = 4.26f, overhang = 0.26f;
-                    if (TiledVisual(go.transform, _groundSprite, size, stripHeight, overhang, 0))
+                    if (_platformSprite != null) GroundVisual(go.transform, size);
+                    else
                     {
-                        float fill = size.y + overhang - stripHeight;
-                        if (fill > 0f)
-                            PrototypeSprites.CreateRect(go.transform, "Fundo", new Vector2(0f, -size.y * 0.5f + fill * 0.5f + 0.02f),
-                                                        new Vector2(size.x, fill + 0.05f), GroundDeepColor, -1);
-                        // Orla de relva (a mesma das plataformas), para se ver bem onde acaba o chão.
-                        float grassScale = PlatformVisualHeight / (_platformSprite != null ? _platformSprite.bounds.size.y : 1f);
-                        TiledVisual(go.transform, _grassSprite, size, GrassPixels / 100f * grassScale,
-                                    PlatformWalkPixels / 100f * grassScale, 1, PlatformTint, 0.25f);
+                        // Sem a imagem das plataformas: faixa antiga (caminho + muro) e escuro até ao fundo.
+                        const float stripHeight = 4.26f, overhang = 0.26f;
+                        if (TiledVisual(go.transform, _groundSprite, size, stripHeight, overhang, 0))
+                        {
+                            float fill = size.y + overhang - stripHeight;
+                            if (fill > 0f)
+                                PrototypeSprites.CreateRect(go.transform, "Fundo", new Vector2(0f, -size.y * 0.5f + fill * 0.5f + 0.02f),
+                                                            new Vector2(size.x, fill + 0.05f), GroundDeepColor, -1);
+                        }
+                        else ColorVisual(go.transform, size, GroundColor);
                     }
-                    else ColorVisual(go.transform, size, GroundColor);
                     break;
                 case BlockKind.Platform:
                     float platformScale = PlatformVisualHeight / (_platformSprite != null ? _platformSprite.bounds.size.y : 1f);
@@ -469,6 +471,83 @@ namespace HeavenlyWarrior.Prototype
                     break;
             }
             return go;
+        }
+
+        /// <summary>
+        /// Chão feito das mesmas peças das plataformas: em cima a relva com pedras (platform.png, que se repete
+        /// sem emendas e tem as pontas arredondadas nos buracos), por baixo pedras repetíveis (ground_body.png)
+        /// que vão escurecendo até ficarem pretas, para o chão não competir com o jogador.
+        /// </summary>
+        void GroundVisual(Transform parent, Vector2 size)
+        {
+            float scale = PlatformVisualHeight / _platformSprite.bounds.size.y;
+            float walk = PlatformWalkPixels / 100f * scale;
+            TiledVisual(parent, _platformSprite, size, PlatformVisualHeight, walk, 0, PlatformTint, 0.3f);
+
+            float top = size.y * 0.5f;                       // topo do collider (local)
+            float bodyTop = top + walk - PlatformVisualHeight * 0.8f; // começa por trás das pedras do topo
+            float bottom = -size.y * 0.5f;
+            float bodyWidth = size.x - 0.1f;
+
+            if (_groundBodySprite != null)
+            {
+                const float bodyHeight = 3.2f;
+                var go = new GameObject("Pedras");
+                go.transform.SetParent(parent, false);
+                go.transform.localPosition = new Vector3(0f, bodyTop - bodyHeight * 0.5f, 0f);
+                go.transform.localScale = new Vector3(scale, scale, 1f);
+                var sr = go.AddComponent<SpriteRenderer>();
+                sr.sprite = _groundBodySprite;
+                sr.drawMode = SpriteDrawMode.Tiled;
+                sr.tileMode = SpriteTileMode.Continuous;
+                sr.size = new Vector2(bodyWidth / scale, bodyHeight / scale);
+                sr.color = GroundBodyTint;
+                sr.sortingOrder = -3;
+
+                // Escurece para baixo
+                const float fadeTop = 0.5f, fadeHeight = 2.5f;
+                var fade = new GameObject("Sombra");
+                fade.transform.SetParent(parent, false);
+                fade.transform.localPosition = new Vector3(0f, bodyTop - fadeTop - fadeHeight * 0.5f, 0f);
+                fade.transform.localScale = new Vector3(bodyWidth, fadeHeight, 1f);
+                var fr = fade.AddComponent<SpriteRenderer>();
+                fr.sprite = FadeSprite;
+                fr.color = GroundDeepColor;
+                fr.sortingOrder = -2;
+                bodyTop -= fadeTop + fadeHeight - 0.02f;
+            }
+
+            float fill = bodyTop - bottom;
+            if (fill > 0f)
+                PrototypeSprites.CreateRect(parent, "Fundo", new Vector2(0f, bottom + fill * 0.5f),
+                                            new Vector2(bodyWidth, fill), GroundDeepColor, -2);
+        }
+
+        static Sprite _fade;
+
+        /// <summary>Gradiente vertical de 1x1 unidade: transparente em cima, opaco em baixo.</summary>
+        static Sprite FadeSprite
+        {
+            get
+            {
+                if (_fade != null) return _fade;
+                const int n = 32;
+                var tex = new Texture2D(1, n, TextureFormat.RGBA32, false)
+                {
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Bilinear,
+                    name = "GroundFade"
+                };
+                for (int y = 0; y < n; y++)
+                {
+                    float t = 1f - (y + 0.5f) / n; // y = 0 é o fundo
+                    tex.SetPixel(0, y, new Color(1f, 1f, 1f, Mathf.SmoothStep(0f, 1f, t)));
+                }
+                tex.Apply();
+                _fade = Sprite.Create(tex, new Rect(0, 0, 1, n), new Vector2(0.5f, 0.5f), n);
+                _fade.name = "GroundFade";
+                return _fade;
+            }
         }
 
         void ColorVisual(Transform parent, Vector2 size, Color color)
@@ -511,7 +590,7 @@ namespace HeavenlyWarrior.Prototype
 
         /// <summary>
         /// A imagem da plataforma tem pontas arredondadas: o sprite é criado com bordas (9-slice), para
-        /// as pontas ficarem iguais e só o meio se repetir. A faixa de cima (a relva) é usada no chão.
+        /// as pontas ficarem iguais e só o meio se repetir. O chão usa a mesma imagem no topo.
         /// </summary>
         void LoadPlatformSprites()
         {
@@ -527,10 +606,6 @@ namespace HeavenlyWarrior.Prototype
                                             CharacterSprites.PixelsPerUnit, 0, SpriteMeshType.FullRect, border);
             _platformSprite.name = "platform";
 
-            float grass = Mathf.Min(GrassPixels, tex.height);
-            _grassSprite = Sprite.Create(tex, new Rect(0, tex.height - grass, tex.width, grass), new Vector2(0.5f, 0.5f),
-                                         CharacterSprites.PixelsPerUnit, 0, SpriteMeshType.FullRect, border);
-            _grassSprite.name = "platform_grass";
         }
 
         /// <summary>Portão: no início (o jogador começa à porta) e na meta (com o portal a brilhar lá dentro).</summary>
